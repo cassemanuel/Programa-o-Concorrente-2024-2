@@ -1,6 +1,4 @@
-# Nome do Projeto
-
-Trabalhos de ProgConc em 2024-2
+# Trabalhos de ProgConc em 2024-2
 
 ## Onde eu fiz e executei
 
