@@ -1,0 +1,16 @@
+# Ignorar a pasta cods-lab2 dentro de Lab 2
+Lab\ 2/cods-lab2/
+
+# Ignorar arquivos de compilação
+*.o
+*.out
+*.exe
+
+# Ignorar arquivos de backup ou temporários
+*~
+*.swp
+
+# Ignorar outros executáveis
+Lab\ 2\ -\ gera_vet
+Lab\ 2\ -\ prod_int_conc
+
