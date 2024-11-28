@@ -2,7 +2,7 @@
 
 ## Onde eu fiz e executei
 
-Todos (ou maior parte, creio eu) feitos no Ubuntu 22.04.4 LTS instalado no meu HDD do notebook.
+Todos (ou maior parte, creio eu) feitos no Ubuntu 22.04.4 LTS instalado no meu notebook.
 
 ## Contribuição e dúvidas
 
