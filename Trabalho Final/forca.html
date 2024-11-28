@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css" />
+  <title>jogo da forca</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    main.container {
+      margin-top: 30px;
+    }
+
+    #game p,
+    #intro p,
+    form p {
+      margin-bottom: 10px;
+    }
+
+    #intro {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    form input {
+      margin: 5px 0;
+    }
+
+    #mensagem {
+      margin-top: 20px;
+      font-style: italic;
+      color: var(--secondary);
+    }
+
+    footer {
+      margin-top: 50px;
+      text-align: center;
+    }
+  </style>
+</head>
+
+<body>
+  <nav class="container-fluid">
+    <ul>
+      <li><strong>jogo da forca</strong></li>
+    </ul>
+    <ul>
+      <li><a href="./" role="button">inicio</a></li>
+      <li><a href="./sobre.html" role="button">sobre</a></li>
+      <li><a href="./contato.html" role="button">contato</a></li>
+    </ul>
+  </nav>
+
+
+  <main class="container">
+    <!-- Título e introdução -->
+    <section id="intro">
+      <hgroup>
+        <h2>Bem-vindo ao Jogo da Forca</h2>
+        <h3>Teste suas habilidades de adivinhação!</h3>
+      </hgroup>
+      <p>
+        Teste nosso jogo da forca com seus amigos por meio de um servidor implementado com WebSocket.io!
+        Desafie outros jogadores e aproveite esta experiência interativa. Para mais informações sobre o
+        desenvolvimento e os conceitos explorados, clique em <a href="./sobre.html">Sobre</a>.
+      </p>
+    </section>
+
+    <!-- login -->
+    <form id="login-form">
+      <hgroup>
+        <h3>faca login</h3>
+      </hgroup>
+      <input id="username" type="text" placeholder="digite seu nome" required />
+      <input id="senha" type="password" placeholder="senha (opcional)" />
+      <button type="submit">entrar</button>
+    </form>
+
+    <!-- configuracao -->
+    <form id="config-form" style="display: none;">
+      <hgroup>
+        <h3>configuracao da sala</h3>
+      </hgroup>
+      <label for="maxJogadores">numero de jogadores:</label>
+      <input id="maxJogadores" type="number" min="1" required />
+      <button id="set-jogadores" type="submit">definir</button>
+      <button id="encerrar-servidor" type="button" style="margin-top: 10px;">Encerrar servidor</button>
+    </form>
+
+    <!-- jogo -->
+    <section id="game" style="display: none;">
+      <hgroup>
+        <h2>jogo da forca</h2>
+      </hgroup>
+      <p id="estado"></p>
+      <p id="vidas"></p>
+      <p id="tentativas"></p>
+      <form id="form" style="display: none;">
+        <input id="letra" maxlength="1" placeholder="digite uma letra" required />
+        <button type="submit">enviar</button>
+      </form>
+      <button id="pronto" style="display: none;">pronto!</button>
+      <p id="mensagem"></p>
+      <button id="novo-jogo" style="display: none;">novo jogo</button>
+    </section>
+  </main>
+
+  <!-- rodape -->
+  <footer class="container">
+    <small>© 2024 UFRJ - Instituto de Computação</small>
+  </footer>
+
+  <script>
+    const socket = io();
+
+    // lidar com login
+    document.getElementById("login-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const username = document.getElementById("username").value;
+      const senha = document.getElementById("senha").value || "";
+
+      socket.emit("login", { username, senha });
+
+      // emitir pedido de sincronização ao servidor
+      socket.emit('sincronizar estado');
+
+      // esconder o formulário de login
+      document.getElementById("login-form").style.display = "none";
+      document.getElementById("mensagem").textContent = "aguardando configuracao da sala ou inicio do jogo.";
+    });
+
+    socket.on("configurador liberado", () => {
+      document.getElementById("config-form").style.display = "block";
+      document.getElementById("mensagem").textContent = "voce pode configurar a sala!";
+    });
+
+    // botão de encerrar servidor
+    document.getElementById("encerrar-servidor").addEventListener("click", () => {
+      if (confirm("Tem certeza de que deseja encerrar o servidor?")) {
+        socket.emit("encerrar servidor");
+      }
+    });
+
+    // resposta do servidor para configurador
+    socket.on("configurador liberado", () => {
+      document.getElementById("config-form").style.display = "block";
+      document.getElementById("mensagem").textContent =
+        "voce pode configurar a sala!";
+    });
+
+    // resposta do servidor para jogador regular
+    socket.on("jogador regular", () => {
+      document.getElementById("game").style.display = "block";
+      document.getElementById("pronto").style.display = "inline-block";
+      document.getElementById("mensagem").textContent =
+        "aguardando o inicio do jogo!";
+    });
+
+    socket.on("mensagem", (data) => {
+      document.getElementById("mensagem").textContent = data;
+    });
+
+    // definir numero maximo de jogadores
+    document.getElementById("set-jogadores").addEventListener("click", (e) => {
+      e.preventDefault();
+      const maxJogadores = parseInt(document.getElementById("maxJogadores").value, 10);
+
+      if (!maxJogadores || maxJogadores < 1) {
+        alert("numero invalido de jogadores.");
+        return;
+      }
+
+      // envia o número máximo de jogadores ao servidor
+      socket.emit("set max jogadores", maxJogadores);
+
+      // mostra mensagem ao configurador
+      document.getElementById("mensagem").textContent = "configurações enviadas! aguarde o início do jogo.";
+    });
+
+
+    // pronto para jogar
+    document.getElementById("pronto").addEventListener("click", () => {
+      socket.emit("player ready");
+      document.getElementById("pronto").style.display = "none";
+      document.getElementById("mensagem").textContent =
+        "aguardando outros jogadores...";
+    });
+
+    // atualizacoes do jogo
+    socket.on("atualizar jogo", (data) => {
+      document.getElementById("estado").textContent = data.estado;
+      document.getElementById("vidas").textContent = `vidas: ${data.vidas}`;
+      document.getElementById(
+        "tentativas"
+      ).textContent = `tentativas: ${data.tentativas.join(", ")}`;
+      document.getElementById("form").style.display = "block";
+    });
+
+    // enviar letra
+    document.getElementById("form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const letra = document.getElementById("letra").value;
+      socket.emit("player attempt", letra);
+      document.getElementById("letra").value = "";
+    });
+
+    // Configuração inicial do botão "novo jogo"
+    document.getElementById("novo-jogo").addEventListener("click", () => {
+      socket.emit("restart game");
+      document.getElementById("novo-jogo").style.display = "none";
+      document.getElementById("mensagem").textContent = "Novo jogo iniciado!";
+    });
+
+    // Fim de jogo
+    socket.on("game over", (data) => {
+      const vencedor = data.vencedor
+        ? `vencedor: ${data.vencedor}`
+        : "ninguém venceu!";
+      document.getElementById(
+        "mensagem"
+      ).textContent = `jogo encerrado! ${vencedor}. palavra: ${data.palavra}`;
+      document.getElementById("novo-jogo").style.display = "inline-block";
+      document.getElementById("form").style.display = "none";
+
+      // Logs para depuração
+      console.log("Recebido evento game over:", data);
+      console.log("Jogadores:", data.jogadores || "não fornecido");
+      console.log("Socket ID:", socket.id);
+      console.log("Jogador registrado:", socket.id);
+      console.log("Estado do jogo atual enviado:", jogo);
+    });
+
+
+  </script>
+</body>
+
+</html>
