@@ -34,15 +34,19 @@ function definirMensagemFinal(jogador, jogadoresRestantes) {
 }
 
 // emite mensagem de fim de jogo para todos os jogadores
-function emitirGameOver(mensagem) {
-	io.emit("game over", {
+function emitirFimDeJogo(mensagem) {
+	console.log("Emitindo fim de jogo com dados:", {
+		vencedor: jogo.vencedor,
+		palavra: jogo.palavra,
+		mensagem: mensagem,
+	});
+	io.emit("Fim de Jogo", {
 		vencedor: jogo.vencedor || null,
 		palavra: jogo.palavra,
 		mensagem: mensagem,
 	});
 	io.emit("mensagem", mensagem); // Envia uma mensagem genérica para todos os jogadores
 }
-
 
 // reinicia quando cloca no novoJogo
 function resetarJogo() {
@@ -136,7 +140,7 @@ io.on('connection', (socket) => {
 		socket.emit('mensagem', 'Aguardando configuração da sala ou início do jogo.');
 
 		// atualiza todos os clientes com o número de jogadores conectados
-		io.emit('update players', Object.keys(jogo.jogadores).length);
+		io.emit('Atualizar jogadores', Object.keys(jogo.jogadores).length);
 	});
 
 	// configurar número máximo de jogadores
@@ -163,7 +167,7 @@ io.on('connection', (socket) => {
 	});
 
 	// jogador clica em "pronto"
-	socket.on("player ready", () => {
+	socket.on("jogador pronto", () => {
 		if (jogoIniciado) {
 			socket.emit("mensagem", "Jogo já iniciado. Aguarde a próxima rodada.");
 			return;
@@ -178,16 +182,13 @@ io.on('connection', (socket) => {
 		socket.emit("mensagem", "Você está pronto! Aguardando os outros jogadores.");
 
 		// verifica se todos os jogadores estão prontos e o número corresponde ao configurado
-		if (
-			jogadoresProntos.size === Object.keys(jogo.jogadores).length &&
-			Object.keys(jogo.jogadores).length === maxJogadores
-		) {
+		if (jogadoresProntos.size === maxJogadores) {
 			iniciarJogo();
 		}
 	});
 
 	// Processar tentativa de letra
-	socket.on('player attempt', (letra) => {
+	socket.on('tentativa', (letra) => {
 		if (!jogoIniciado) {
 			socket.emit('error', 'O jogo ainda não começou.');
 			return;
@@ -199,11 +200,9 @@ io.on('connection', (socket) => {
 			socket.emit('error', 'Entrada inválida! Insira apenas uma letra.');
 			return;
 		}
-
-		//removi a parte do "jogador não encontrado", sempre tem jogador
-
+		
+		// removi a parte do "jogador não encontrado", sempre tem jogador
 		const jogador = jogo.jogadores[socket.id];
-
 		if (!jogador) {
 			socket.emit('error', 'Jogador não encontrado ou desconectado.');
 			return;
@@ -212,11 +211,8 @@ io.on('connection', (socket) => {
 			socket.emit('error', 'Letra já tentada!');
 			return;
 		}
-
-
 		//array armazenando as letras que o jogador ja tentou advinhar
 		jogador.tentativas.push(letra);
-
 		// verifica se a palavra foi configurada antes de aceitar tentativas
 		// evita erros caso alguem tente jogar antes do jogo comecar
 		if (!jogo.palavra) {
@@ -249,38 +245,44 @@ io.on('connection', (socket) => {
 		if (palavraAtual.replace(/\s/g, '') === jogo.palavra) {
 			// vitória: jogador adivinhou a palavra
 			jogo.vencedor = jogador.nome;
-			emitirGameOver(`Parabéns, ${jogador.nome}! Você venceu ao adivinhar a palavra.`);
+			emitirFimDeJogo(`Parabéns, ${jogador.nome}! Você venceu ao adivinhar a palavra.`);
 			finalizarJogo(mensagem);
+			console.log("Vencedor registrado:", jogo.vencedor);
+
 		} else if (jogador.vidas <= 0) {
 			// derrota: jogador perdeu todas as vidas
-			socket.emit('game over', { vencedor: null, palavra: jogo.palavra });
+			socket.emit('Fim de Jogo', { vencedor: null, palavra: jogo.palavra }); // Notifica apenas o jogador que perdeu
+			socket.emit('redirect', { url: '/' }); // Redireciona para a página inicial
+			// Remover o jogador atual do jogo
 			delete jogo.jogadores[socket.id];
 
-			// verificar estado geral dos jogadores
+			// Verificar estado geral dos jogadores após a remoção
+			const jogadoresRestantes = Object.values(jogo.jogadores).filter(j => j.vidas > 0);
+
 			if (jogadoresRestantes.length === 1) {
-				// último jogador restante vence
 				const ultimoJogador = jogadoresRestantes[0];
-				jogo.vencedor = ultimoJogador.nome;
-				emitirGameOver(`Último sobrevivente: ${ultimoJogador.nome}. Parabéns!`);
-				finalizarJogo(mensagem);
+				if (ultimoJogador.tentativas.join("").includes(jogo.palavra)) {
+					// Vence apenas se adivinhar a palavra
+					jogo.vencedor = ultimoJogador.nome;
+					emitirFimDeJogo(`Parabéns, ${ultimoJogador.nome}! Você venceu ao adivinhar a palavra.`);
+					finalizarJogo(mensagem);
+				} else {
+					// Último jogador não adivinhou a palavra
+					io.to(ultimoJogador.id).emit('mensagem', 'Você é o último jogador restante! Boa sorte.');
+				}
 			} else if (jogadoresRestantes.length === 0) {
-				// todos os jogadores perderam
-				emitirGameOver('Todos os jogadores perderam. Que azar!');
+				// Ninguém resta no jogo
+				emitirFimDeJogo('Todos os jogadores perderam. Que azar!');
 				finalizarJogo(mensagem);
 			}
 		}
-
 	});
 
-	socket.on("restart game", () => {
-		console.log("reiniciando o jogo...");
-
-		// reinicia o estado global
-		resetarJogo();
-
-		// libera o configurador novamente
-		io.emit("configurador liberado");
-		io.emit("mensagem", "configuração liberada para nova rodada.");
+	// Reiniciar o jogo
+	socket.on("reiniciar jogo", () => {
+		console.log("Reiniciando o jogo...");
+		reiniciarEstado(); // Reinicia o estado do jogo, limpando dados antigos
+		iniciarJogo(); // Configura uma nova palavra e inicia o jogo
 	});
 
 	// ajeitar o jogo quando tiver desconexões
@@ -304,7 +306,7 @@ io.on('connection', (socket) => {
 			console.log('todos os jogadores saíram. jogo reiniciado.');
 		} else {
 			// emite atualização para os jogadores restantes
-			io.emit('update players', Object.keys(jogo.jogadores).length);
+			io.emit('atualiza jogadores', Object.keys(jogo.jogadores).length);
 		}
 
 		// log de desconexão
@@ -353,7 +355,7 @@ function finalizarJogo(mensagem) {
 	io.emit('mensagem', mensagem); // Consistente com outros eventos em português
 
 	console.log('Jogo finalizado. Aguardando reinício.');
-
+	io.emit('redirect', { url: '/' }); // Redireciona para a página inicial
 	// Opção de encerramento manual (apenas para testes ou necessidades específicas)
 	const finalizarServidor = false; // Altere para true se quiser encerrar o servidor
 	if (finalizarServidor) {

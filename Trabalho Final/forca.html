@@ -74,7 +74,7 @@
     <!-- login -->
     <form id="login-form">
       <hgroup>
-        <h3>faca login</h3>
+        <h3>Faça login para configurar o multiplayer ou encerrar o servidor.</h3>
       </hgroup>
       <input id="username" type="text" placeholder="digite seu nome" required />
       <input id="senha" type="password" placeholder="senha (opcional)" />
@@ -175,17 +175,17 @@
         return;
       }
 
-      // envia o número máximo de jogadores ao servidor
       socket.emit("set max jogadores", maxJogadores);
 
-      // mostra mensagem ao configurador
-      document.getElementById("mensagem").textContent = "configurações enviadas! aguarde o início do jogo.";
+      // esconder o formulario de configuracao e mostrar o jogo
+      document.getElementById("config-form").style.display = "none";
+      document.getElementById("game").style.display = "block";
+      document.getElementById("pronto").style.display = "inline-block";
     });
-
 
     // pronto para jogar
     document.getElementById("pronto").addEventListener("click", () => {
-      socket.emit("player ready");
+      socket.emit("jogador pronto");
       document.getElementById("pronto").style.display = "none";
       document.getElementById("mensagem").textContent =
         "aguardando outros jogadores...";
@@ -201,29 +201,52 @@
       document.getElementById("form").style.display = "block";
     });
 
+    // rediciona o perdedor pra homepage
+    socket.on('redirect', (data) => {
+      console.log(`Redirecionando para: ${data.url}`);
+      window.location.href = data.url;
+    });
+
+
     // enviar letra
     document.getElementById("form").addEventListener("submit", (e) => {
       e.preventDefault();
       const letra = document.getElementById("letra").value;
-      socket.emit("player attempt", letra);
+      socket.emit("tentativa", letra);
       document.getElementById("letra").value = "";
     });
 
     // Configuração inicial do botão "novo jogo"
     document.getElementById("novo-jogo").addEventListener("click", () => {
-      socket.emit("restart game");
+      socket.emit("reiniciar jogo");
       document.getElementById("novo-jogo").style.display = "none";
       document.getElementById("mensagem").textContent = "Novo jogo iniciado!";
     });
 
     // Fim de jogo
-    socket.on("game over", (data) => {
-      const vencedor = data.vencedor
-        ? `vencedor: ${data.vencedor}`
-        : "ninguém venceu!";
-      document.getElementById(
-        "mensagem"
-      ).textContent = `jogo encerrado! ${vencedor}. palavra: ${data.palavra}`;
+    socket.on("Fim de Jogo", (data) => {
+      console.log("Evento game over recebido no cliente:", data);
+
+      // Verificar se os dados contêm o vencedor
+      if (!data.vencedor) {
+        console.error("Erro: Nenhum vencedor definido no evento game over!");
+      }
+
+      let mensagem = `Jogo encerrado! Palavra: ${data.palavra}`;
+
+      // Adicione o vencedor apenas se houver
+      if (data.vencedor) {
+        mensagem = `Jogo encerrado! Vencedor: ${data.vencedor}. Palavra: ${data.palavra}`;
+      }
+      alert(mensagem);
+      const mensagemElemento = document.getElementById("mensagem");
+
+      if (!mensagemElemento) {
+        console.error("Erro: Elemento #mensagem não encontrado no DOM!");
+        return;
+      }
+
+      mensagemElemento.textContent = `jogo encerrado! ${vencedor}. palavra: ${data.palavra}`;
       document.getElementById("novo-jogo").style.display = "inline-block";
       document.getElementById("form").style.display = "none";
 
